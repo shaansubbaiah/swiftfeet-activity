@@ -1,0 +1,7 @@
+[Activity]
+name = Swift Feet
+activity_version = 1
+bundle_id = ca.tbsf.SwiftFeet
+exec = sugar-activity activity.SwiftFeetActivity
+icon = activity-swiftfeet
+license = GPLv2+
