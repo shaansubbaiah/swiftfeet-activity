@@ -1,4 +1,4 @@
- # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 # Copyright 2012 Daniel Drake
 #
@@ -18,19 +18,20 @@
 
 import os
 import logging
-import gi
 
 from gi.repository import GObject
 GObject.threads_init()
 
+# from gi.repository import Gtk
+import gi
 gi.require_version('Gtk', '3.0')
-gi.require_version('Gst', '1.0')
 from gi.repository import Gtk
-from gi.repository import Gdk
+
+# from gi.repository import Gdk
+from gi.repository import Gdk, Pango, GObject
 from gi.repository import Gst
 from gi.repository import Gio
 from gi.repository import GLib
-from gi.repository import GdkPixbuf
 
 from gettext import gettext as _
 
@@ -41,8 +42,6 @@ from sugar3.activity.widgets import ActivityToolbarButton
 from sugar3.activity.widgets import StopButton
 
 from videos import EXERCISES, DANCES
-
-Gst.init(None)
 
 class PaddedVBox(Gtk.VBox):
     __gtype_name__ = "PaddedVBox"
@@ -57,10 +56,8 @@ class PaddedVBox(Gtk.VBox):
 class VideoPlayer(Gtk.EventBox):
     def __init__(self):
         super(VideoPlayer, self).__init__()
-        # self.unset_flags(Gtk.DOUBLE_BUFFERED)
-        # self.set_flags(Gtk.APP_PAINTABLE)
-        self.set_double_buffered(False)
-        self.set_app_paintable(True)
+        self.unset_flags(Gtk.DOUBLE_BUFFERED)
+        self.set_flags(Gtk.APP_PAINTABLE)
 
         self._sink = None
         self._xid = None
@@ -129,8 +126,7 @@ class VideoPlayer(Gtk.EventBox):
             ret = self._mpipeline.set_state(Gst.State.PLAYING)
 
     def __realize(self, widget):
-        # self._xid = self.window.xid
-        self._xid = self.get_property('window').get_xid()
+        self._xid = self.window.xid
 
     def do_expose_event(self):
         if self._sink:
@@ -203,8 +199,7 @@ class VideoButton(Gtk.EventBox):
 
         self._title = Gtk.Label(label=title)
         self._title.modify_fg(Gtk.StateType.NORMAL, Gdk.color_parse("#FFFFFF"))
-        # self._vbox.pack_start(self._title, expand=False, padding=5)
-        self._vbox.pack_start(self._title, expand=False, fill=True, padding=5)
+        self._vbox.pack_start(self._title, expand=False, padding=5)
         self._title.show()
 
     def _image_size_allocated(self, widget, allocation):
@@ -298,8 +293,7 @@ class SwiftFeetActivity(activity.Activity):
         self._menu = Gtk.Table(4, 5, True)
         self._menu.set_row_spacings(10)
         self._menu.set_col_spacings(10)
-        vbox.pack_start(self._menu, expand=True, fill=True, padding=0)
-        # vbox.add(self._menu)
+        gtk_box_pack_start(self._menu, expand=True, fill=True)
         self._menu.show()
 
         self._videos = EXERCISES
@@ -307,7 +301,7 @@ class SwiftFeetActivity(activity.Activity):
 
         self._video_title = Gtk.Label()
         self._video_title.modify_fg(Gtk.StateType.NORMAL, Gdk.color_parse("#FFFFFF"))
-        vbox.pack_start(self._video_title, expand=False, fill=True, padding=0)
+        vbox.pack_start(self._video_title, False, True, 0)
 
         self._video = VideoPlayer()
         vbox.pack_start(self._video, expand=True, fill=True, padding=10)
@@ -316,7 +310,7 @@ class SwiftFeetActivity(activity.Activity):
         self._video_description = Gtk.Label()
         self._video_description.set_line_wrap(True)
         self._video_description.modify_fg(Gtk.StateType.NORMAL, Gdk.color_parse("#FFFFFF"))
-        vbox.pack_start(self._video_description, expand=False, fill=True, padding=0)
+        vbox.pack_start(self._video_description, False, True, 0)
 
         # Try to fix description height to 3 lines so that it doesn't shift size while
         # changing videos.

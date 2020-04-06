@@ -1,4 +1,4 @@
- # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 # Copyright 2012 Daniel Drake
 #
@@ -18,19 +18,20 @@
 
 import os
 import logging
+
+import gobject
+gobject.threads_init()
+
+# import gtk
 import gi
-
-from gi.repository import GObject
-GObject.threads_init()
-
 gi.require_version('Gtk', '3.0')
-gi.require_version('Gst', '1.0')
 from gi.repository import Gtk
-from gi.repository import Gdk
-from gi.repository import Gst
-from gi.repository import Gio
-from gi.repository import GLib
-from gi.repository import GdkPixbuf
+
+# from gtk import gdk
+from gi.repository import Gdk, Pango, Gobject
+import gst
+import gio
+import glib
 
 from gettext import gettext as _
 
@@ -41,8 +42,6 @@ from sugar3.activity.widgets import ActivityToolbarButton
 from sugar3.activity.widgets import StopButton
 
 from videos import EXERCISES, DANCES
-
-Gst.init(None)
 
 class PaddedVBox(Gtk.VBox):
     __gtype_name__ = "PaddedVBox"
@@ -57,21 +56,19 @@ class PaddedVBox(Gtk.VBox):
 class VideoPlayer(Gtk.EventBox):
     def __init__(self):
         super(VideoPlayer, self).__init__()
-        # self.unset_flags(Gtk.DOUBLE_BUFFERED)
-        # self.set_flags(Gtk.APP_PAINTABLE)
-        self.set_double_buffered(False)
-        self.set_app_paintable(True)
+        self.unset_flags(Gtk.DOUBLE_BUFFERED)
+        self.set_flags(Gtk.APP_PAINTABLE)
 
         self._sink = None
         self._xid = None
         self.connect('realize', self.__realize)
 
         # video
-        self._vpipeline = Gst.ElementFactory.make("playbin2", "vplayer")
+        self._vpipeline = gst.element_factory_make("playbin2", "vplayer")
         # audio (instructions)
-        self._apipeline = Gst.ElementFactory.make("playbin2", "aplayer")
+        self._apipeline = gst.element_factory_make("playbin2", "aplayer")
         # music
-        self._mpipeline = Gst.ElementFactory.make("playbin2", "mplayer")
+        self._mpipeline = gst.element_factory_make("playbin2", "mplayer")
 
         bus = self._vpipeline.get_bus()
         bus.enable_sync_message_emission()
@@ -97,20 +94,20 @@ class VideoPlayer(Gtk.EventBox):
 
     def __on_vmessage(self, bus, message):
         t = message.type
-        if t == Gst.MessageType.EOS:
-            self._vpipeline.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH, 0)
+        if t == gst.MESSAGE_EOS:
+            self._vpipeline.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, 0)
 
     def __on_mmessage(self, bus, message):
         t = message.type
-        if t == Gst.MessageType.EOS:
-            self._mpipeline.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH, 0)
+        if t == gst.MESSAGE_EOS:
+            self._mpipeline.seek_simple(gst.FORMAT_TIME, gst.SEEK_FLAG_FLUSH, 0)
 
     def __on_amessage(self, bus, message):
         t = message.type
-        if t != Gst.MessageType.EOS:
+        if t != gst.MESSAGE_EOS:
             return
 
-        self._apipeline.set_state(Gst.State.NULL)
+        self._apipeline.set_state(gst.STATE_NULL)
 
         uri = self._mpipeline.get_property('uri')
         if not uri:
@@ -120,17 +117,16 @@ class VideoPlayer(Gtk.EventBox):
         # without software mixing support (one sound at a time). Start
         # the music now.
         ret, state, pending = self._mpipeline.get_state()
-        if state != Gst.State.PLAYING:
+        if state != gst.STATE_PLAYING:
             # Wait for apipeline to stop
             self._apipeline.get_state()
 
             # Need to reprogram URI for unknown reasons
             self._mpipeline.set_property('uri', uri)
-            ret = self._mpipeline.set_state(Gst.State.PLAYING)
+            ret = self._mpipeline.set_state(gst.STATE_PLAYING)
 
     def __realize(self, widget):
-        # self._xid = self.window.xid
-        self._xid = self.get_property('window').get_xid()
+        self._xid = self.window.xid
 
     def do_expose_event(self):
         if self._sink:
@@ -142,22 +138,22 @@ class VideoPlayer(Gtk.EventBox):
     def play(self, filename, music_name):
         if filename:
             path = os.path.join(activity.get_bundle_path(), "video", filename + ".ogg")
-            gfile = Gio.File.new_for_path(path)
+            gfile = gio.File(path=path)
             self._vpipeline.set_property('uri', gfile.get_uri())
 
-        ret = self._vpipeline.set_state(Gst.State.PLAYING)
+        ret = self._vpipeline.set_state(gst.STATE_PLAYING)
 
         if filename:
             path = os.path.join(activity.get_bundle_path(), "audio", filename + ".ogg")
-            gfile = Gio.File.new_for_path(path)
+            gfile = gio.File(path=path)
             if gfile.query_exists():
                 self._apipeline.set_property('uri', gfile.get_uri())
-                self._apipeline.set_state(Gst.State.PLAYING)
+                self._apipeline.set_state(gst.STATE_PLAYING)
 
         self._mpipeline.set_property('uri', None)
         if music_name:
             path = os.path.join(activity.get_bundle_path(), "music", music_name + ".ogg")
-            gfile = Gio.File.new_for_path(path)
+            gfile = gio.File(path=path)
             if gfile.query_exists():
                 # FIXME: XO-1.75 doesn't have software mixing at the moment
                 # Only one sound can be played at the same time.
@@ -168,17 +164,17 @@ class VideoPlayer(Gtk.EventBox):
                 # the music in the EOS handler for apipeline.
                 self._apipeline.get_state()
                 self._mpipeline.set_property('uri', gfile.get_uri())
-                self._mpipeline.set_state(Gst.State.PLAYING)
+                self._mpipeline.set_state(gst.STATE_PLAYING)
 
     def stop(self):
-        self._vpipeline.set_state(Gst.State.NULL)
-        self._apipeline.set_state(Gst.State.NULL)
-        self._mpipeline.set_state(Gst.State.NULL)
+        self._vpipeline.set_state(gst.STATE_NULL)
+        self._apipeline.set_state(gst.STATE_NULL)
+        self._mpipeline.set_state(gst.STATE_NULL)
 
 class VideoButton(Gtk.EventBox):
     def __init__(self, title, image_path):
         super(VideoButton, self).__init__()
-        self.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse("#000000"))
+        self.modify_bg(Gtk.STATE_NORMAL, gtk.gdk.color_parse("#000000"))
         self.connect('realize', self._eventbox_realized)
         self.connect('enter-notify-event', self._eventbox_entered)
         self.connect('leave-notify-event', self._eventbox_left)
@@ -188,7 +184,7 @@ class VideoButton(Gtk.EventBox):
         self._last_height = 0
 
         self._frame = Gtk.Frame()
-        self._frame.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse("#000000"))
+        self._frame.modify_bg(Gtk.STATE_NORMAL, gtk.gdk.color_parse("#000000"))
         self.add(self._frame)
         self._frame.show()
 
@@ -201,10 +197,9 @@ class VideoButton(Gtk.EventBox):
         self._vbox.pack_start(self._image, expand=True, fill=True, padding=5)
         self._image.show()
 
-        self._title = Gtk.Label(label=title)
-        self._title.modify_fg(Gtk.StateType.NORMAL, Gdk.color_parse("#FFFFFF"))
-        # self._vbox.pack_start(self._title, expand=False, padding=5)
-        self._vbox.pack_start(self._title, expand=False, fill=True, padding=5)
+        self._title = Gtk.Label(title)
+        self._title.modify_fg(Gtk.STATE_NORMAL, gtk.gdk.color_parse("#FFFFFF"))
+        self._vbox.pack_start(self._title, expand=False, padding=5)
         self._title.show()
 
     def _image_size_allocated(self, widget, allocation):
@@ -217,17 +212,17 @@ class VideoButton(Gtk.EventBox):
         self._last_width = width
         height = allocation.height
         self._last_height = height
-        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_size(self._image_path, width, height)
+        pixbuf = gdk.pixbuf_new_from_file_at_size(self._image_path, width, height)
         self._image.set_from_pixbuf(pixbuf)
 
     def _eventbox_entered(self, widget, event):
-        self._frame.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse("#333333"))
+        self._frame.modify_bg(Gtk.STATE_NORMAL, gtk.gdk.color_parse("#333333"))
 
     def _eventbox_left(self, widget, event):
-        self._frame.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse("#000000"))
+        self._frame.modify_bg(Gtk.STATE_NORMAL, gtk.gdk.color_parse("#000000"))
 
     def _eventbox_realized(self, widget):
-        self.window.set_cursor(Gdk.Cursor.new(Gdk.HAND2))
+        self.window.set_cursor(gdk.Cursor(gdk.HAND2))
 
 class SwiftFeetActivity(activity.Activity):
     def __init__(self, handle):
@@ -236,11 +231,11 @@ class SwiftFeetActivity(activity.Activity):
         self.max_participants = 1
 
         # Set blackground as black
-        self.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse("#000000"))
+        self.modify_bg(Gtk.STATE_NORMAL, gtk.gdk.color_parse("#000000"))
 
         if hasattr(self, '_event_box'):
             # for pre-0.96
-            self._event_box.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse("#000000"))
+            self._event_box.modify_bg(Gtk.STATE_NORMAL, gtk.gdk.color_parse("#000000"))
 
         toolbar_box = ToolbarBox()
         activity_button = ActivityToolbarButton(self)
@@ -298,16 +293,15 @@ class SwiftFeetActivity(activity.Activity):
         self._menu = Gtk.Table(4, 5, True)
         self._menu.set_row_spacings(10)
         self._menu.set_col_spacings(10)
-        vbox.pack_start(self._menu, expand=True, fill=True, padding=0)
-        # vbox.add(self._menu)
+        vbox.pack_start(self._menu, expand=True, fill=True)
         self._menu.show()
 
         self._videos = EXERCISES
         self._generate_menu()
 
         self._video_title = Gtk.Label()
-        self._video_title.modify_fg(Gtk.StateType.NORMAL, Gdk.color_parse("#FFFFFF"))
-        vbox.pack_start(self._video_title, expand=False, fill=True, padding=0)
+        self._video_title.modify_fg(Gtk.STATE_NORMAL, gtk.gdk.color_parse("#FFFFFF"))
+        vbox.pack_start(self._video_title, expand=False)
 
         self._video = VideoPlayer()
         vbox.pack_start(self._video, expand=True, fill=True, padding=10)
@@ -315,8 +309,8 @@ class SwiftFeetActivity(activity.Activity):
 
         self._video_description = Gtk.Label()
         self._video_description.set_line_wrap(True)
-        self._video_description.modify_fg(Gtk.StateType.NORMAL, Gdk.color_parse("#FFFFFF"))
-        vbox.pack_start(self._video_description, expand=False, fill=True, padding=0)
+        self._video_description.modify_fg(Gtk.STATE_NORMAL, gtk.gdk.color_parse("#FFFFFF"))
+        vbox.pack_start(self._video_description, expand=False)
 
         # Try to fix description height to 3 lines so that it doesn't shift size while
         # changing videos.
@@ -344,7 +338,7 @@ class SwiftFeetActivity(activity.Activity):
         self._video.show()
         self._video.stop()
 
-        self._video_title.set_markup('<span size="x-large" weight="bold">' + GLib.markup_escape_text(video[1]) + '</span>')
+        self._video_title.set_markup('<span size="x-large" weight="bold">' + glib.markup_escape_text(video[1]) + '</span>')
         self._video_title.show()
 
         if len(video) > 2:
