@@ -16,6 +16,14 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+# TODO: Fix allocation as given here 
+# https://github.com/sugarlabs/sugar-docs/blob/master/src/gtk3-porting-guide.md#other-considerations
+#
+# Issue where
+#       bus = self._vpipeline.get_bus()
+# AttributeError: 'NoneType' object has no attribute 'get_bus'
+
+
 import os
 import logging
 import gi
@@ -227,7 +235,8 @@ class VideoButton(Gtk.EventBox):
         self._frame.modify_bg(Gtk.StateType.NORMAL, Gdk.color_parse("#000000"))
 
     def _eventbox_realized(self, widget):
-        self.window.set_cursor(Gdk.Cursor.new(Gdk.HAND2))
+        # self.window.set_cursor(Gdk.Cursor.new(Gdk.HAND2))
+        self.get_window().set_cursor(Gdk.Cursor(Gdk.CursorType.HAND2))
 
 class SwiftFeetActivity(activity.Activity):
     def __init__(self, handle):
